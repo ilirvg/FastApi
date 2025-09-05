@@ -7,7 +7,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(prefix="/posts", tags=['Posts'])
 
 my_posts = [
     {"title": "title of post 1", "content": "content of post 1", "id": 1},
@@ -19,7 +19,7 @@ def find_post(id):
         if p['id'] == id:
             return p
 
-@router.get("/posts", response_model=List[schemas.Post])
+@router.get("/", response_model=List[schemas.Post])
 def get_posts(db: Session = Depends(get_db)):
     # with psycopg.connect(**DB_CONFIG) as conn:
     #     with conn.cursor(row_factory=dict_row) as cursor:
@@ -28,7 +28,7 @@ def get_posts(db: Session = Depends(get_db)):
     posts = db.query(models.Post).all()
     return posts
 
-@router.post("/createpost", status_code=status.HTTP_201_CREATED, response_model=schemas.Post)
+@router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.Post)
 def create_post(post: schemas.PostCreate, db: Session = Depends(get_db)):
     # with psycopg.connect(**DB_CONFIG) as conn:
     #     with conn.cursor() as cursor:
@@ -41,7 +41,7 @@ def create_post(post: schemas.PostCreate, db: Session = Depends(get_db)):
     db.refresh(post_new)
     return post_new
 
-@router.get("/posts/{id}", response_model=schemas.Post)
+@router.get("/{id}", response_model=schemas.Post)
 def get_post(id: int, db: Session = Depends(get_db)):
     # with psycopg.connect(**DB_CONFIG) as conn:
     #     with conn.cursor(row_factory=dict_row) as cursor:
@@ -54,7 +54,7 @@ def get_post(id: int, db: Session = Depends(get_db)):
 
     return post
 
-@router.delete('/posts/{id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{id}', status_code=status.HTTP_204_NO_CONTENT)
 def delete_post(id: int, db: Session = Depends(get_db)):
 
     # with psycopg.connect(**DB_CONFIG) as conn:
@@ -73,7 +73,7 @@ def delete_post(id: int, db: Session = Depends(get_db)):
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-@router.put('/posts/{id}', response_model=schemas.Post)
+@router.put('/{id}', response_model=schemas.Post)
 def update_post(id: int, updated_post: schemas.PostCreate, db: Session = Depends(get_db)):
     try:
         logger.info(f"Starting update for post {id}")
