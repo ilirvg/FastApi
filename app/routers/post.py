@@ -1,7 +1,7 @@
 from fastapi import HTTPException, Response, status, Depends, APIRouter
 from typing import List
 from sqlalchemy.orm import Session
-from .. import models, schemas
+from .. import models, schemas, oauth2
 from ..database import get_db
 import logging
 
@@ -20,7 +20,7 @@ def find_post(id):
             return p
 
 @router.get("/", response_model=List[schemas.Post])
-def get_posts(db: Session = Depends(get_db)):
+def get_posts(db: Session = Depends(get_db), current_user: models.User = Depends(oauth2.get_current_user)):
     # with psycopg.connect(**DB_CONFIG) as conn:
     #     with conn.cursor(row_factory=dict_row) as cursor:
     #         cursor.execute("SELECT * FROM posts")
@@ -29,20 +29,21 @@ def get_posts(db: Session = Depends(get_db)):
     return posts
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.Post)
-def create_post(post: schemas.PostCreate, db: Session = Depends(get_db)):
+def create_post(post: schemas.PostCreate, db: Session = Depends(get_db), current_user:models.User = Depends(oauth2.get_current_user)):
     # with psycopg.connect(**DB_CONFIG) as conn:
     #     with conn.cursor() as cursor:
     #         cursor.execute("""INSERT INTO posts (title, content, published) VALUES (%s, %s, %s) RETURNING *""", (post.title, post.content, post.published))
     #         post_new = cursor.fetchone()
     #         conn.commit()
-    post_new = models.Post(**post.model_dump())
+    print(current_user.email)
+    post_new = models.Post(owner_id = current_user.id, **post.model_dump())
     db.add(post_new)
     db.commit()
     db.refresh(post_new)
     return post_new
 
 @router.get("/{id}", response_model=schemas.Post)
-def get_post(id: int, db: Session = Depends(get_db)):
+def get_post(id: int, db: Session = Depends(get_db), current_user: models.User = Depends(oauth2.get_current_user)):
     # with psycopg.connect(**DB_CONFIG) as conn:
     #     with conn.cursor(row_factory=dict_row) as cursor:
     #         cursor.execute("""SELECT * FROM posts WHERE id = %s""", (str(id),))
@@ -55,7 +56,7 @@ def get_post(id: int, db: Session = Depends(get_db)):
     return post
 
 @router.delete('/{id}', status_code=status.HTTP_204_NO_CONTENT)
-def delete_post(id: int, db: Session = Depends(get_db)):
+def delete_post(id: int, db: Session = Depends(get_db), current_user: models.User = Depends(oauth2.get_current_user)):
 
     # with psycopg.connect(**DB_CONFIG) as conn:
     #     with conn.cursor(row_factory=dict_row) as cursor:
@@ -63,30 +64,33 @@ def delete_post(id: int, db: Session = Depends(get_db)):
     #         post = cursor.fetchone()
     #         conn.commit()
 
-    post = db.query(models.Post).filter(models.Post.id == id)
+    post_query = db.query(models.Post).filter(models.Post.id == id)
+    post = post_query.first()
 
-    if not post.first():
+    if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"post with {id} does not exist")
 
-    post.delete(synchronize_session=False)
+    if post.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Not Authorised for requested action")
+
+
+    post_query.delete(synchronize_session=False)
     db.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 @router.put('/{id}', response_model=schemas.Post)
-def update_post(id: int, updated_post: schemas.PostCreate, db: Session = Depends(get_db)):
+def update_post(id: int, updated_post: schemas.PostCreate, db: Session = Depends(get_db), current_user: int = Depends(oauth2.get_current_user)):
     try:
-        logger.info(f"Starting update for post {id}")
-
-        requested_post = db.query(models.Post).filter(models.Post.id == id)
-        logger.info("Query created")
-
-        if not requested_post.first():
+        requested_post_query = db.query(models.Post).filter(models.Post.id == id)
+        requested_post = requested_post_query.first()
+        if not requested_post:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"post with {id} does not exist")
         
-        logger.info("Post found, updating...")
+        if requested_post.owner_id != current_user.id:
+           raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Not Authorised for requested action")
 
-        requested_post.update(updated_post.model_dump(), synchronize_session=False)
+        requested_post_query.update(updated_post.model_dump(), synchronize_session=False)
         db.commit()
 
         # Get the updated post to return
