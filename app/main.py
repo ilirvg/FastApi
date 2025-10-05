@@ -3,6 +3,7 @@ from . import models
 from .database import engine
 from .routers import post, user, auth
 import logging
+from .config import settings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')

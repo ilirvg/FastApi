@@ -1,5 +1,5 @@
 from fastapi import HTTPException, Response, status, Depends, APIRouter
-from typing import List
+from typing import List, Optional
 from sqlalchemy.orm import Session
 from .. import models, schemas, oauth2
 from ..database import get_db
@@ -9,23 +9,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/posts", tags=['Posts'])
 
-my_posts = [
-    {"title": "title of post 1", "content": "content of post 1", "id": 1},
-    {"title": "favorite foods", "content": "I like pizza", "id": 2}
-    ]
-
-def find_post(id):
-    for p in my_posts:
-        if p['id'] == id:
-            return p
-
 @router.get("/", response_model=List[schemas.Post])
-def get_posts(db: Session = Depends(get_db), current_user: models.User = Depends(oauth2.get_current_user)):
+def get_posts(db: Session = Depends(get_db), current_user: models.User = Depends(oauth2.get_current_user), limit: int = 10, skip: int = 0, search: Optional[str] = ""):
     # with psycopg.connect(**DB_CONFIG) as conn:
     #     with conn.cursor(row_factory=dict_row) as cursor:
     #         cursor.execute("SELECT * FROM posts")
     #         posts = cursor.fetchall()    
-    posts = db.query(models.Post).all()
+    print(limit)
+    posts = db.query(models.Post).filter(models.Post.title.contains(search)).limit(limit).offset(skip).all()
     return posts
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.Post)
